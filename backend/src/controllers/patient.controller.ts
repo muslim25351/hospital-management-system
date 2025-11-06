@@ -275,9 +275,9 @@ export const createAppointment = async (req: ReqWithUser, res: Response) => {
   }
 };
 
-// GET /api/appointments/mine
-// List appointments for the authenticated patient
-export const listMyAppointments = async (req: ReqWithUser, res: Response) => {
+// GET /api/appointments/my
+// View appointments for the authenticated patient
+export const viewMyAppointments = async (req: ReqWithUser, res: Response) => {
   try {
     const authUser: any = req.user;
     if (!authUser?._id)
@@ -306,7 +306,88 @@ export const listMyAppointments = async (req: ReqWithUser, res: Response) => {
 
     return res.status(200).json({ total, page, limit, items });
   } catch (err: any) {
-    console.error("listMyAppointments error:", err?.message || err);
+    console.error("viewMyAppointments error:", err?.message || err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+// GET /api/appointments/my/:id
+// View a single appointment owned by the authenticated patient
+export const viewMyAppointmentById = async (
+  req: ReqWithUser,
+  res: Response
+) => {
+  try {
+    const authUser: any = req.user;
+    if (!authUser?._id)
+      return res.status(401).json({ message: "Unauthorized" });
+
+    const { id } = req.params;
+    const appt = await Appointment.findOne({ _id: id, patient: authUser._id })
+      .populate({ path: "doctor", select: "firstName lastName email" })
+      .populate({ path: "department", select: "name" });
+    if (!appt)
+      return res.status(404).json({ message: "Appointment not found" });
+    return res.status(200).json({ appointment: appt });
+  } catch (err: any) {
+    console.error("viewMyAppointmentById error:", err?.message || err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+// PATCH /api/appointments/my/:id/reschedule
+// Reschedule an appointment for the authenticated patient
+export const rescheduleMyAppointment = async (
+  req: ReqWithUser,
+  res: Response
+) => {
+  try {
+    const authUser: any = req.user;
+    if (!authUser?._id)
+      return res.status(401).json({ message: "Unauthorized" });
+
+    const { id } = req.params;
+    const { scheduledAt } = req.body || {};
+    if (!scheduledAt)
+      return res.status(400).json({ message: "scheduledAt is required" });
+
+    const updated = await Appointment.findOneAndUpdate(
+      { _id: id, patient: authUser._id },
+      { $set: { scheduledAt: new Date(scheduledAt), updatedBy: authUser._id } },
+      { new: true }
+    );
+    if (!updated)
+      return res.status(404).json({ message: "Appointment not found" });
+    return res
+      .status(200)
+      .json({ message: "Appointment rescheduled", appointment: updated });
+  } catch (err: any) {
+    console.error("rescheduleMyAppointment error:", err?.message || err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+// POST /api/appointments/my/:id/cancel
+// Cancel an appointment owned by the authenticated patient
+export const cancelMyAppointment = async (req: ReqWithUser, res: Response) => {
+  try {
+    const authUser: any = req.user;
+    if (!authUser?._id)
+      return res.status(401).json({ message: "Unauthorized" });
+
+    const { id } = req.params;
+    const updated = await Appointment.findOneAndUpdate(
+      { _id: id, patient: authUser._id },
+      { $set: { status: "cancelled", updatedBy: authUser._id } },
+      { new: true }
+    );
+    if (!updated)
+      return res.status(404).json({ message: "Appointment not found" });
+    return res
+      .status(200)
+      .json({ message: "Appointment cancelled", appointment: updated });
+  } catch (err: any) {
+    console.error("cancelMyAppointment error:", err?.message || err);
     return res.status(500).json({ message: "Internal server error" });
   }
 };

@@ -1,0 +1,29 @@
+import { Router } from "express";
+import { isAuthenticated } from "../utiles/verifyToken.ts";
+import { requireRole } from "../middlewares/role.middleware.ts";
+import {
+  listMyAppointments,
+  getMyAppointmentById,
+  updateMyAppointmentStatus,
+  rescheduleMyAppointmentAsDoctor,
+  addNotesToMyAppointment,
+  assignMyselfToAppointment,
+  listMyPatients,
+} from "../controllers/doctor.controller.ts";
+
+const router = Router();
+
+router.use(isAuthenticated, requireRole("doctor"));
+
+// Appointments
+router.get("/appointments", listMyAppointments);
+router.get("/appointments/:id", getMyAppointmentById);
+router.patch("/appointments/:id/status", updateMyAppointmentStatus);
+router.patch("/appointments/:id/reschedule", rescheduleMyAppointmentAsDoctor);
+router.patch("/appointments/:id/notes", addNotesToMyAppointment);
+router.patch("/appointments/:id/assign", assignMyselfToAppointment);
+
+// Patients
+router.get("/patients", listMyPatients);
+
+export default router;
