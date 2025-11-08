@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import User from "../models/user.model.ts";
 import Role from "../models/role.model.ts";
 import Appointment from "../models/appointment.model.ts";
+import Availability from "../models/availability.model.ts";
 import type { ReqWithUser } from "../utiles/verifyToken.ts";
 
 // Reusable helper to drop sensitive/internal fields
@@ -60,11 +61,7 @@ export const createPatient = async (req: Request, res: Response) => {
     // Hash password
     const hashed = await bcrypt.hash(password, 10);
 
-    // Simple userId generator (could be replaced by nanoid/uuid)
-    const userId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-
     const patient = await User.create({
-      userId,
       firstName,
       lastName,
       email,
@@ -247,20 +244,58 @@ export const createAppointment = async (req: ReqWithUser, res: Response) => {
     if (!authUser?._id)
       return res.status(401).json({ message: "Unauthorized" });
 
-    const { scheduledAt, reason, doctorId, departmentId, notes } =
-      req.body || {};
-    if (!scheduledAt || !reason) {
-      return res
-        .status(400)
-        .json({ message: "scheduledAt and reason are required" });
+    const {
+      scheduledAt,
+      reason,
+      doctorId,
+      departmentId,
+      notes,
+      availabilityId,
+    } = req.body || {};
+    if ((!scheduledAt && !availabilityId) || !reason) {
+      return res.status(400).json({
+        message: "Provide reason and either availabilityId or scheduledAt",
+      });
+    }
+
+    let doctorToUse = doctorId as string | undefined;
+    let dateToUse: Date | null = scheduledAt ? new Date(scheduledAt) : null;
+
+    if (availabilityId) {
+      const slot = await Availability.findOne({
+        _id: availabilityId,
+        status: "available",
+      });
+      if (!slot)
+        return res.status(404).json({ message: "Availability slot not found" });
+      doctorToUse = String(slot.doctor);
+      dateToUse = new Date(slot.start);
+      await Availability.updateOne(
+        { _id: availabilityId },
+        { $set: { status: "booked" } }
+      );
+    } else if (doctorToUse && dateToUse) {
+      const match = await Availability.findOne({
+        doctor: doctorToUse,
+        start: dateToUse,
+        status: "available",
+      });
+      if (!match)
+        return res
+          .status(400)
+          .json({ message: "Selected time is not available" });
+      await Availability.updateOne(
+        { _id: match._id },
+        { $set: { status: "booked" } }
+      );
     }
 
     const appt = await Appointment.create({
       patient: authUser._id,
-      doctor: doctorId || undefined,
+      doctor: doctorToUse || undefined,
       department: departmentId || undefined,
       reason,
-      scheduledAt: new Date(scheduledAt),
+      scheduledAt: dateToUse ?? new Date(),
       status: "pending",
       notes,
       createdBy: authUser._id,
@@ -271,6 +306,30 @@ export const createAppointment = async (req: ReqWithUser, res: Response) => {
       .json({ message: "Appointment created", appointment: appt });
   } catch (err: any) {
     console.error("createAppointment error:", err?.message || err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+// GET /api/appointments/availability
+export const listDoctorAvailability = async (req: Request, res: Response) => {
+  try {
+    const doctorId = String(req.query.doctorId || "").trim();
+    if (!doctorId)
+      return res.status(400).json({ message: "doctorId is required" });
+    const from = req.query.from ? new Date(String(req.query.from)) : undefined;
+    const to = req.query.to ? new Date(String(req.query.to)) : undefined;
+
+    const filter: any = { doctor: doctorId, status: "available" };
+    if (from || to) {
+      filter.start = {} as any;
+      if (from) (filter.start as any).$gte = from;
+      if (to) (filter.start as any).$lte = to;
+    }
+
+    const items = await Availability.find(filter).sort({ start: 1 });
+    return res.status(200).json({ total: items.length, items });
+  } catch (err: any) {
+    console.error("listDoctorAvailability error:", err?.message || err);
     return res.status(500).json({ message: "Internal server error" });
   }
 };

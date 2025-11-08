@@ -53,11 +53,7 @@ export const register = async (req: Request, res: Response) => {
     const saltRounds = 10;
     const hashed = await bcrypt.hash(password, saltRounds);
 
-    // Create a simple userId (could be improved: UUID, nanoid, etc.)
-    const userId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-
     const user = await User.create({
-      userId,
       firstName,
       lastName,
       email,

@@ -9,6 +9,9 @@ import {
   addNotesToMyAppointment,
   assignMyselfToAppointment,
   listMyPatients,
+  addAvailability,
+  listMyAvailability,
+  removeAvailability,
 } from "../controllers/doctor.controller.ts";
 
 const router = Router();
@@ -25,5 +28,10 @@ router.patch("/appointments/:id/assign", assignMyselfToAppointment);
 
 // Patients
 router.get("/patients", listMyPatients);
+
+// Availability
+router.post("/availability", addAvailability);
+router.get("/availability", listMyAvailability);
+router.delete("/availability/:id", removeAvailability);
 
 export default router;
