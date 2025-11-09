@@ -14,7 +14,7 @@ const UserSchema = new Schema(
     email: { type: String, required: true, unique: true, lowercase: true },
     phone: { type: String, required: true, unique: true },
     password: { type: String, required: true },
-    gender: { type: String, enum: ["Male", "Female", "Other"] },
+    gender: { type: String, enum: ["Male", "Female"] },
     dateOfBirth: { type: Date },
 
     role: {
@@ -46,7 +46,9 @@ const UserSchema = new Schema(
       validTill: { type: Date },
     },
 
-    status: { type: String, enum: ["active", "inactive"], default: "active" },
+    status: { type: String, enum: ["active", "inactive"] },
+    approvedAt: { type: Date },
+    approvedBy: { type: Types.ObjectId, ref: "User" },
   },
   { timestamps: true }
 );
@@ -79,51 +81,54 @@ async function getRoleNameById(roleId: any): Promise<string | undefined> {
 }
 
 /**
- * ✅ This "pre-validate" hook runs BEFORE the user is saved.
- * If userId is missing, it automatically generates one.
+ * ✅ This hook runs BEFORE validation.
+ * - Sets status default based on role (patient => active, others => inactive) if not provided
+ * - Ensures userId is generated with a role-based prefix when missing
  */
 UserSchema.pre("validate", async function (next) {
-  // If userId already exists, do nothing
-  if (this.userId) return next();
+  try {
+    const doc = this as any;
+    // Resolve role name once for both status and userId logic
+    const roleName: string | undefined = await getRoleNameById(doc.role);
 
-  // ✅ 1. Get role name from the database
-  const roleName = await getRoleNameById((this as any).role);
-
-  // ✅ 2. Map each role to a userId prefix
-  // doctor → DOC, patient → PAT, nurse → NUR, admin → ADM
-  const prefixMap: Record<string, string> = {
-    doctor: "DOC",
-    patient: "PAT",
-    nurse: "NUR",
-    admin: "ADM",
-  };
-
-  // If the role is unknown, use default prefix "USR"
-  const prefix = prefixMap[roleName?.toLowerCase() || ""] || "USR";
-
-  /**
-   * ✅ 3. Try generating a unique userId up to 5 times
-   * (Very unlikely to get duplicates, but just in case)
-   */
-  for (let i = 0; i < 5; i++) {
-    const newUserId = generateUserId(prefix);
-
-    const UserModel = mongoose.model("User") as any;
-    const exists = await UserModel.findOne({ userId: newUserId }).select("_id");
-
-    // If no user already has this ID, use it and stop trying
-    if (!exists) {
-      (this as any).userId = newUserId;
-      return next();
+    // Set status only if not already set by controller/logic
+    if (!doc.status) {
+      doc.status =
+        roleName?.toLowerCase() === "patient" ? "active" : "inactive";
     }
-  }
 
-  /**
-   * ✅ 4. If all 5 tries fail (VERY unlikely),
-   * just generate one final ID without checking.
-   */
-  (this as any).userId = generateUserId(prefix);
-  return next();
+    // Generate userId if missing
+    if (!doc.userId) {
+      const prefixMap: Record<string, string> = {
+        doctor: "DOC",
+        patient: "PAT",
+        nurse: "NUR",
+        admin: "ADM",
+      };
+      const prefix = prefixMap[roleName?.toLowerCase() || ""] || "USR";
+
+      // Try a few times to avoid rare collisions
+      for (let i = 0; i < 5; i++) {
+        const newUserId = generateUserId(prefix);
+        const UserModel = mongoose.model("User") as any;
+        const exists = await UserModel.findOne({ userId: newUserId }).select(
+          "_id"
+        );
+        if (!exists) {
+          doc.userId = newUserId;
+          break;
+        }
+      }
+      if (!doc.userId) {
+        // Fallback: assign without checking (extremely unlikely to collide)
+        doc.userId = generateUserId(prefix);
+      }
+    }
+
+    next();
+  } catch (e) {
+    next(e as any);
+  }
 });
 
 const UserModel = mongoose.models.User || mongoose.model("User", UserSchema);
