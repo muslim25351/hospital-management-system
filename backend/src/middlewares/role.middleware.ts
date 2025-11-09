@@ -1,6 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
 import Role from "../models/role.model.ts";
-
 type ReqWithUser = Request & { user?: any };
 
 /**

@@ -1,5 +1,5 @@
 import type { Response } from "express";
-import jwt, { Secret, SignOptions } from "jsonwebtoken";
+import jwt from "jsonwebtoken";
 
 // 24 hours in milliseconds
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
@@ -9,11 +9,10 @@ const ONE_DAY_MS = 24 * 60 * 60 * 1000;
  * Keeps a simple API and reuses the central JWT utility for signing.
  */
 export function generateToken(userId: string, res: Response): string {
-  const SECRET_KEY: Secret = process.env.JWT_SECRET ?? "default_secret_key";
-  const options = {
-    expiresIn: process.env.JWT_EXPIRES_IN ?? "1d",
-  } as SignOptions; // e.g. '1d', '2h'
-  const token = jwt.sign({ userId }, SECRET_KEY, options);
+  const SECRET_KEY = process.env.JWT_SECRET ?? "default_secret_key";
+  // jsonwebtoken expects expiresIn as string or number, but type may be too strict in some installs
+  const expiresIn: any = process.env.JWT_EXPIRES_IN ?? "1d";
+  const token = jwt.sign({ userId }, SECRET_KEY, { expiresIn } as any);
 
   res.cookie("jwt", token, {
     maxAge: ONE_DAY_MS,

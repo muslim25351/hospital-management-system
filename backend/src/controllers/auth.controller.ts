@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import User from "../models/user.model.ts";
+import Role, { ROLE_NAMES } from "../models/role.model.ts";
 import { generateToken } from "../utiles/createToken.ts";
 
 // Helper to omit sensitive fields from user objects
@@ -20,7 +21,7 @@ export const register = async (req: Request, res: Response) => {
       email,
       phone,
       password,
-      role, // Role ObjectId
+      roleName, // preferred: dropdown value (e.g. "doctor"); defaults to 'patient'
       gender,
       dateOfBirth,
       address,
@@ -34,12 +35,33 @@ export const register = async (req: Request, res: Response) => {
     } = req.body || {};
 
     // Basic validation
-    if (!firstName || !lastName || !email || !phone || !password || !role) {
+    if (!firstName || !lastName || !email || !phone || !password) {
       return res.status(400).json({
         message:
-          "Missing required fields: firstName, lastName, email, phone, password, role",
+          "Missing required fields: firstName, lastName, email, phone, password",
       });
     }
+
+    // Default roleName to 'patient' if none provided
+    const effectiveRoleName = String(roleName || "patient").toLowerCase();
+    if (!ROLE_NAMES.includes(effectiveRoleName)) {
+      return res.status(400).json({
+        message: `Invalid roleName '${effectiveRoleName}'. Allowed: ${ROLE_NAMES.join(
+          ", "
+        )}`,
+      });
+    }
+
+    // Resolve role id by name
+    const roleDoc = await Role.findOne({ name: effectiveRoleName }).select(
+      "_id name"
+    );
+    if (!roleDoc) {
+      return res.status(400).json({
+        message: `Role '${effectiveRoleName}' not found. Ensure roles are seeded.`,
+      });
+    }
+    const roleId = roleDoc._id;
 
     // Check for existing user by email or phone
     const existing = await User.findOne({ $or: [{ email }, { phone }] });
@@ -53,13 +75,17 @@ export const register = async (req: Request, res: Response) => {
     const saltRounds = 10;
     const hashed = await bcrypt.hash(password, saltRounds);
 
+    // Non-patient roles must be approved by admin before first login
+    const initialStatus =
+      effectiveRoleName === "patient" ? "active" : "inactive";
+
     const user = await User.create({
       firstName,
       lastName,
       email,
       phone,
       password: hashed,
-      role,
+      role: roleId,
       gender,
       dateOfBirth,
       address,
@@ -70,15 +96,30 @@ export const register = async (req: Request, res: Response) => {
       allergies,
       medicalHistory,
       insurance,
+      status: initialStatus,
     });
 
-    // Issue JWT as HttpOnly cookie
-    const token = generateToken(user._id.toString(), res);
+    // Only issue token cookie if status active
+    const token =
+      user.status === "active"
+        ? generateToken(user._id.toString(), res)
+        : undefined;
 
+    const safeUser = sanitizeUser(user);
     return res.status(201).json({
       message: "Registration successful",
-      user: sanitizeUser(user),
+      user: {
+        ...safeUser,
+        roleId: roleId.toString(),
+        roleName: effectiveRoleName,
+        status: user.status,
+        requiresApproval: user.status !== "active",
+      },
       token,
+      warning:
+        user.status !== "active"
+          ? "Account pending admin approval. Login disabled until activated."
+          : undefined,
     });
   } catch (err: any) {
     console.error("Register error:", err?.message || err);
@@ -106,6 +147,13 @@ export const login = async (req: Request, res: Response) => {
     const ok = await bcrypt.compare(password, user.password);
     if (!ok) {
       return res.status(401).json({ message: "Invalid credentials" });
+    }
+
+    if (user.status !== "active") {
+      return res.status(403).json({
+        message: "Account is not active. Pending admin approval.",
+        status: user.status,
+      });
     }
 
     const token = generateToken(user._id.toString(), res);

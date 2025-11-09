@@ -53,48 +53,78 @@ const UserSchema = new Schema(
 
 UserSchema.index({ email: 1, phone: 1 }, { unique: true });
 
+/**
+ * ✅ This function creates a simple user ID
+ * Example: DOC-1234 or PAT-5678
+ */
 function generateUserId(prefix: string): string {
-  const random = Math.floor(1000 + Math.random() * 9000); // 4-digit
-  return `${prefix}-${random}`;
+  const randomNumber = Math.floor(10000 + Math.random() * 90000); // Generates 5-digit number
+  return `${prefix}-${randomNumber}`;
 }
 
-async function resolveRoleName(roleId: any): Promise<string | undefined> {
+/**
+ * ✅ Get the name of the role (doctor, patient, nurse, admin)
+ * based on the role ID stored in the user document.
+ */
+async function getRoleNameById(roleId: any): Promise<string | undefined> {
   if (!roleId) return undefined;
+
   try {
     const Role = mongoose.model("Role");
-    const doc: any = await Role.findById(roleId).select("name").lean();
-    return doc?.name;
+    const roleDoc: any = await Role.findById(roleId).select("name").lean();
+    return roleDoc?.name; // return the role's name (e.g., "doctor")
   } catch {
-    return undefined;
+    return undefined; // If something goes wrong, return nothing
   }
 }
 
+/**
+ * ✅ This "pre-validate" hook runs BEFORE the user is saved.
+ * If userId is missing, it automatically generates one.
+ */
 UserSchema.pre("validate", async function (next) {
-  // Only assign if missing
+  // If userId already exists, do nothing
   if (this.userId) return next();
-  const roleName = await resolveRoleName((this as any).role);
+
+  // ✅ 1. Get role name from the database
+  const roleName = await getRoleNameById((this as any).role);
+
+  // ✅ 2. Map each role to a userId prefix
+  // doctor → DOC, patient → PAT, nurse → NUR, admin → ADM
   const prefixMap: Record<string, string> = {
     doctor: "DOC",
     patient: "PAT",
     nurse: "NUR",
     admin: "ADM",
   };
+
+  // If the role is unknown, use default prefix "USR"
   const prefix = prefixMap[roleName?.toLowerCase() || ""] || "USR";
 
-  // Retry a few times in unlikely case of collision
+  /**
+   * ✅ 3. Try generating a unique userId up to 5 times
+   * (Very unlikely to get duplicates, but just in case)
+   */
   for (let i = 0; i < 5; i++) {
-    const candidate = generateUserId(prefix);
-    const existing = await (mongoose.model("User") as any)
-      .findOne({ userId: candidate })
-      .select("_id");
-    if (!existing) {
-      (this as any).userId = candidate;
+    const newUserId = generateUserId(prefix);
+
+    const UserModel = mongoose.model("User") as any;
+    const exists = await UserModel.findOne({ userId: newUserId }).select("_id");
+
+    // If no user already has this ID, use it and stop trying
+    if (!exists) {
+      (this as any).userId = newUserId;
       return next();
     }
   }
-  // Fallback
+
+  /**
+   * ✅ 4. If all 5 tries fail (VERY unlikely),
+   * just generate one final ID without checking.
+   */
   (this as any).userId = generateUserId(prefix);
   return next();
 });
 
-export default mongoose.models.User || mongoose.model("User", UserSchema);
+const UserModel = mongoose.models.User || mongoose.model("User", UserSchema);
+export default UserModel as mongoose.Model<any>;

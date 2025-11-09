@@ -38,6 +38,9 @@ export const isAuthenticated = async (
     }
 
     // 3) Load user and attach to request
+    // UserModel may be a Model or a function, depending on how mongoose.models.User is set up
+    // Always get the model instance from mongoose
+
     const user = await User.findById(userId).select("-password");
     if (!user) {
       return res.status(401).json({ message: "Unauthorized: user not found" });

@@ -23,5 +23,7 @@ const AppointmentSchema = new Schema(
 
 AppointmentSchema.index({ patient: 1, scheduledAt: -1 });
 
-export default mongoose.models.Appointment ||
+const AppointmentModel =
+  mongoose.models.Appointment ||
   mongoose.model("Appointment", AppointmentSchema);
+export default AppointmentModel as mongoose.Model<any>;

@@ -19,5 +19,7 @@ const AvailabilitySchema = new Schema(
 
 AvailabilitySchema.index({ doctor: 1, start: 1, end: 1 }, { unique: true });
 
-export default mongoose.models.Availability ||
+const AvailabilityModel =
+  mongoose.models.Availability ||
   mongoose.model("Availability", AvailabilitySchema);
+export default AvailabilityModel as mongoose.Model<any>;
