@@ -14,7 +14,7 @@ const UserSchema = new Schema(
     email: { type: String, required: true, unique: true, lowercase: true },
     phone: { type: String, required: true, unique: true },
     password: { type: String, required: true },
-    gender: { type: String, enum: ["Male", "Female"] },
+    gender: { type: String, enum: ["Male", "Female", "Other"] },
     dateOfBirth: { type: Date },
 
     role: {
@@ -46,6 +46,7 @@ const UserSchema = new Schema(
       validTill: { type: Date },
     },
 
+    // Keep enum for safety; remove default so hooks control initial value strictly
     status: { type: String, enum: ["active", "inactive"] },
     approvedAt: { type: Date },
     approvedBy: { type: Types.ObjectId, ref: "User" },
@@ -88,13 +89,22 @@ async function getRoleNameById(roleId: any): Promise<string | undefined> {
 UserSchema.pre("validate", async function (next) {
   try {
     const doc = this as any;
+    const isNew = (this as any).isNew === true;
     // Resolve role name once for both status and userId logic
     const roleName: string | undefined = await getRoleNameById(doc.role);
 
-    // Set status only if not already set by controller/logic
-    if (!doc.status) {
-      doc.status =
-        roleName?.toLowerCase() === "patient" ? "active" : "inactive";
+    // Enforce status rules at creation time to avoid accidental activation
+    // - Patients: become active unless explicitly set to inactive
+    // - Non-patients: always forced to inactive (even if controller sent active)
+    if (isNew) {
+      if (roleName && roleName.toLowerCase() === "patient") {
+        if (doc.status !== "inactive") doc.status = "active"; // allow explicit inactive override
+      } else {
+        doc.status = "inactive";
+      }
+    } else if (!doc.status) {
+      // Existing document missing status (legacy) -> normalize to inactive
+      doc.status = "inactive";
     }
 
     // Generate userId if missing
@@ -104,6 +114,7 @@ UserSchema.pre("validate", async function (next) {
         patient: "PAT",
         nurse: "NUR",
         admin: "ADM",
+        labtechnician: "LAB",
       };
       const prefix = prefixMap[roleName?.toLowerCase() || ""] || "USR";
 
@@ -125,6 +136,30 @@ UserSchema.pre("validate", async function (next) {
       }
     }
 
+    next();
+  } catch (e) {
+    next(e as any);
+  }
+});
+
+// Final safety: pre-save to guard against late mutations setting non-patient active before first save
+UserSchema.pre("save", async function (next) {
+  try {
+    const doc = this as any;
+    if (doc.isNew) {
+      const roleName = await getRoleNameById(doc.role);
+      if (roleName && roleName.toLowerCase() !== "patient") {
+        if (doc.status !== "inactive") doc.status = "inactive";
+      }
+      if (
+        roleName &&
+        roleName.toLowerCase() === "patient" &&
+        doc.status !== "inactive"
+      ) {
+        // Keep as active for patient unless explicitly marked inactive
+        doc.status = "active";
+      }
+    }
     next();
   } catch (e) {
     next(e as any);

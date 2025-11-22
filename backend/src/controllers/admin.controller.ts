@@ -4,24 +4,26 @@ import User from "../models/user.model.ts";
 type ReqWithUser = Request & { user?: any };
 
 // PATCH /api/admin/users/:id/approve
+// Note: :id is the human-friendly userId (e.g., NUR-67942), not the Mongo ObjectId
 export const approveRole = async (req: Request, res: Response) => {
   try {
-    const userId = req.params.id || req.params.userId;
+    const userId = req.params.id?.trim();
     if (!userId) return res.status(400).json({ message: "Missing user id" });
 
-    const user = await User.findById(userId).select("role status");
+    // Look up by human-friendly userId
+    const user = await User.findOne({ userId }).select("role status");
     if (!user) return res.status(404).json({ message: "User not found" });
 
     if (user.status === "active") {
       return res.status(200).json({
         message: "User already active",
-        user: { _id: userId, status: user.status },
+        user: { userId, status: user.status },
       });
     }
 
-    // Activate account
-    const updated = await User.findByIdAndUpdate(
-      userId,
+    // Activate account and set audit fields
+    const updated = await User.findOneAndUpdate(
+      { userId },
       {
         status: "active",
         approvedAt: new Date(),

@@ -75,9 +75,10 @@ export const register = async (req: Request, res: Response) => {
     const saltRounds = 10;
     const hashed = await bcrypt.hash(password, saltRounds);
 
-    // Non-patient roles must be approved by admin before first login
+    // Non-patient roles must be approved by admin before first login.
+    // We do NOT trust any incoming status field; model hooks enforce final value.
     const initialStatus =
-      effectiveRoleName === "patient" ? "active" : "inactive";
+      effectiveRoleName === "patient" ? "active" : undefined;
 
     const user = await User.create({
       firstName,
@@ -96,7 +97,8 @@ export const register = async (req: Request, res: Response) => {
       allergies,
       medicalHistory,
       insurance,
-      status: initialStatus,
+      // Only pass status for patient; for others let schema force inactive
+      ...(initialStatus ? { status: initialStatus } : {}),
     });
 
     // Only issue token cookie if status active
