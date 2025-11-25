@@ -4,6 +4,7 @@ import User from "../models/user.model.ts";
 import Role from "../models/role.model.ts";
 import Appointment from "../models/appointment.model.ts";
 import Availability from "../models/availability.model.ts";
+import Department from "../models/department.model.ts";
 import type { ReqWithUser } from "../utiles/verifyToken.ts";
 
 // Reusable helper to drop sensitive/internal fields
@@ -247,8 +248,8 @@ export const createAppointment = async (req: ReqWithUser, res: Response) => {
     const {
       scheduledAt,
       reason,
-      doctorId,
-      departmentId,
+      doctorName,
+      departmentName,
       notes,
       availabilityId,
     } = req.body || {};
@@ -258,8 +259,27 @@ export const createAppointment = async (req: ReqWithUser, res: Response) => {
       });
     }
 
-    let doctorToUse = doctorId as string | undefined;
+    let doctorToUse: string | undefined;
+    let departmentToUse: string | undefined;
     let dateToUse: Date | null = scheduledAt ? new Date(scheduledAt) : null;
+
+    // Lookup doctor by name if provided
+    if (doctorName) {
+      const doc = await User.findOne({
+        role: { $exists: true },
+        firstName: { $regex: `^${doctorName.split(" ")[0]}`, $options: "i" },
+        lastName: doctorName.split(" ")[1]
+          ? { $regex: `^${doctorName.split(" ")[1]}`, $options: "i" }
+          : undefined,
+      });
+      if (doc) doctorToUse = doc._id;
+    }
+
+    // Lookup department by name if provided
+    if (departmentName) {
+      const dept = await Department.findOne({ name: departmentName });
+      if (dept) departmentToUse = String(dept._id);
+    }
 
     if (availabilityId) {
       const slot = await Availability.findOne({
@@ -293,7 +313,7 @@ export const createAppointment = async (req: ReqWithUser, res: Response) => {
     const appt = await Appointment.create({
       patient: authUser._id,
       doctor: doctorToUse || undefined,
-      department: departmentId || undefined,
+      department: departmentToUse || undefined,
       reason,
       scheduledAt: dateToUse ?? new Date(),
       status: "pending",

@@ -1,5 +1,12 @@
-import mongoose from "mongoose";
+import mongoose, { Document, Model } from "mongoose";
 const { Schema } = mongoose;
+
+export interface IDepartment extends Document {
+  name: string;
+  description?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
 
 const DepartmentSchema = new Schema(
   {
@@ -9,5 +16,8 @@ const DepartmentSchema = new Schema(
   { timestamps: true }
 );
 
-export default mongoose.models.Department ||
-  mongoose.model("Department", DepartmentSchema);
+const Department: Model<IDepartment> = 
+  (mongoose.models.Department as Model<IDepartment>) ||
+  mongoose.model<IDepartment>("Department", DepartmentSchema);
+
+export default Department;
