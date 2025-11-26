@@ -264,15 +264,27 @@ export const createAppointment = async (req: ReqWithUser, res: Response) => {
     let dateToUse: Date | null = scheduledAt ? new Date(scheduledAt) : null;
 
     // Lookup doctor by name if provided
+    // Lookup doctor by name if provided
     if (doctorName) {
-      const doc = await User.findOne({
-        role: { $exists: true },
-        firstName: { $regex: `^${doctorName.split(" ")[0]}`, $options: "i" },
-        lastName: doctorName.split(" ")[1]
-          ? { $regex: `^${doctorName.split(" ")[1]}`, $options: "i" }
-          : undefined,
-      });
-      if (doc) doctorToUse = doc._id;
+      const parts = doctorName.trim().split(/\s+/);
+      const firstNameQuery = parts[0];
+      const lastNameQuery = parts.slice(1).join(" ");
+
+      const query: any = { role: { $exists: true } };
+      if (firstNameQuery) {
+        query.firstName = { $regex: new RegExp(`^${firstNameQuery}`, "i") };
+      }
+      if (lastNameQuery) {
+        query.lastName = { $regex: new RegExp(`^${lastNameQuery}`, "i") };
+      }
+
+      const doc = await User.findOne(query);
+      if (!doc) {
+        return res
+          .status(404)
+          .json({ message: `Doctor '${doctorName}' not found` });
+      }
+      doctorToUse = String(doc._id);
     }
 
     // Lookup department by name if provided

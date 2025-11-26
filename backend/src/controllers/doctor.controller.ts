@@ -81,13 +81,21 @@ export const updateMyAppointmentStatus = async (
         .status(400)
         .json({ message: `status must be one of: ${allowed.join(", ")}` });
     }
-    const updated = await Appointment.findOneAndUpdate(
-      { _id: id, doctor: me._id },
+    const appt = await Appointment.findById(id);
+    if (!appt) {
+      return res.status(404).json({ message: "Appointment not found" });
+    }
+    if (String(appt.doctor) !== String(me._id)) {
+      return res
+        .status(403)
+        .json({ message: "You are not assigned to this appointment" });
+    }
+
+    const updated = await Appointment.findByIdAndUpdate(
+      id,
       { $set: { status, updatedBy: me._id } },
       { new: true }
     );
-    if (!updated)
-      return res.status(404).json({ message: "Appointment not found" });
     return res
       .status(200)
       .json({ message: "Status updated", appointment: updated });
