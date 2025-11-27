@@ -12,6 +12,7 @@ import {
   addAvailability,
   listMyAvailability,
   removeAvailability,
+  addLabTest,
 } from "../controllers/doctor.controller.ts";
 
 const router = Router();
@@ -33,5 +34,8 @@ router.get("/patients", listMyPatients);
 router.post("/availability", addAvailability);
 router.get("/availability", listMyAvailability);
 router.delete("/availability/:id", removeAvailability);
+
+// Lab Tests
+router.post("/lab-tests", addLabTest);
 
 export default router;

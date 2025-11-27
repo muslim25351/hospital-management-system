@@ -1,7 +1,10 @@
 import type { Request, Response } from "express";
+import Role from "../models/role.model.ts";
 import Appointment from "../models/appointment.model.ts";
 import User from "../models/user.model.ts";
 import Availability from "../models/availability.model.ts";
+import LabTestModel from "../models/labTest.model.ts";
+
 
 type ReqWithUser = Request & { user?: any };
 
@@ -206,9 +209,16 @@ export const listMyPatients = async (req: ReqWithUser, res: Response) => {
     const patientIds = await Appointment.distinct("patient", {
       doctor: me._id,
     });
-    const patients = await User.find({ _id: { $in: patientIds } }).select(
-      "-password"
-    );
+
+    // Find the 'patient' role ID
+    const patientRole = await Role.findOne({ name: "patient" });
+
+    const filter: any = { _id: { $in: patientIds } };
+    if (patientRole) {
+      filter.role = patientRole._id;
+    }
+
+    const patients = await User.find(filter).select("-password");
     return res.status(200).json({ total: patients.length, items: patients });
   } catch (err: any) {
     console.error("listMyPatients error:", err?.message || err);
@@ -295,3 +305,66 @@ export const removeAvailability = async (req: ReqWithUser, res: Response) => {
     return res.status(500).json({ message: "Internal server error" });
   }
 };
+
+// POST /api/doctor/lab-tests
+export const addLabTest = async (req: ReqWithUser, res: Response) => {
+  try {
+    const me = req.user;
+    if (!me?._id) return res.status(401).json({ message: "Unauthorized" });
+
+    const {
+      patientUserId, // MRN e.g. PAT-12345
+      patientName, // Full name or partial
+      testType,
+      specimenType,
+      priority,
+      notes,
+    } = req.body || {};
+
+    if (!patientUserId || !testType) {
+      return res
+        .status(400)
+        .json({ message: "patientUserId (MRN) and testType are required" });
+    }
+
+    // Find patient by userId (MRN)
+    // Optionally verify name matches if provided
+    const query: any = { userId: patientUserId };
+    
+    // If patientName is provided, we can try to match it too, 
+    // but usually MRN is unique enough. 
+    // Let's just verify the name matches if provided to avoid mistakes.
+    const patient = await User.findOne(query);
+
+    if (!patient) {
+      return res.status(404).json({ message: "Patient not found with that ID" });
+    }
+
+    // Optional: Check if name matches (case-insensitive)
+    if (patientName) {
+      const fullName = `${patient.firstName} ${patient.lastName}`.toLowerCase();
+      if (!fullName.includes(patientName.toLowerCase())) {
+         return res.status(400).json({ 
+             message: `Patient ID found, but name does not match. Found: ${patient.firstName} ${patient.lastName}` 
+         });
+      }
+    }
+
+    const test = await LabTestModel.create({
+      patient: patient._id,
+      orderedBy: me._id,
+      doctor: me._id,
+      testType,
+      specimenType,
+      priority: priority || "routine",
+      notes,
+    });
+
+    return res.status(201).json({ message: "Lab test ordered", test });
+  } catch (err: any) {
+    console.error("addLabTest error:", err?.message || err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+
