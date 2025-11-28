@@ -8,7 +8,7 @@ export const ROLE_NAMES: string[] = [
   "nurse",
   "patient",
   "pharmacist",
-  "labTechnician",
+  "labtechnician",
   "receptionist",
   "radiologist",
 ];

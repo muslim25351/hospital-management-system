@@ -331,9 +331,6 @@ export const addLabTest = async (req: ReqWithUser, res: Response) => {
     // Optionally verify name matches if provided
     const query: any = { userId: patientUserId };
     
-    // If patientName is provided, we can try to match it too, 
-    // but usually MRN is unique enough. 
-    // Let's just verify the name matches if provided to avoid mistakes.
     const patient = await User.findOne(query);
 
     if (!patient) {
