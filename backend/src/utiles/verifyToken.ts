@@ -5,26 +5,6 @@ import jwt from "jsonwebtoken";
 // Extend the Request type to include an optional `user` property
 export type ReqWithUser = Request & { user?: unknown };
 
-/**
- * Authentication middleware
- * ----------------------------------------------
- * Sources of token:
- *  1. HttpOnly cookie named `jwt` (requires cookie-parser and CORS credentials)
- *  2. Authorization header: `Authorization: Bearer <token>`
- *
- * Common causes of `Unauthorized: no token provided`:
- *  - Cookie not sent (missing `credentials: 'include'` on fetch / axios)
- *  - Origin mismatch (CORS origin differs from frontend URL so browser blocks cookie)
- *  - Token stored but expired
- *  - Request sent to wrong port/host (cookie is scoped to a different origin)
- *  - You logged in as a non-active user; login did not set cookie
- *
- * Debug tips:
- *  - After login, check browser devtools > Application > Cookies for `jwt`
- *  - Use Authorization header manually if testing via Postman: `Bearer <token>`
- *  - Ensure CLIENT_ORIGIN env matches the frontend origin exactly (protocol, host, port)
- *  - If still failing, temporarily log cookie/header values (uncomment block below)
- */
 export const isAuthenticated = async (
   req: ReqWithUser,
   res: Response,

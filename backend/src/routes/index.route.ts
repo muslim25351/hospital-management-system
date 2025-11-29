@@ -5,6 +5,7 @@ import authRoute from "./auth.route.ts";
 import roleRoutes from "./role.route.ts";
 import adminRoutes from "./admin.route.ts";
 import labRoutes from "./lab.route.ts";
+import pharmacistRoutes from "./pharmacist.route.ts";
 
 const router = Router();
 
@@ -17,5 +18,6 @@ router.use("/appointments", appointmentRoutes);
 router.use("/doctor", doctorRoutes);
 router.use("/admin", adminRoutes);
 router.use("/lab", labRoutes);
+router.use("/pharmacist", pharmacistRoutes);
 
 export default router;

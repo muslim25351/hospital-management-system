@@ -4,7 +4,7 @@ import Appointment from "../models/appointment.model.ts";
 import User from "../models/user.model.ts";
 import Availability from "../models/availability.model.ts";
 import LabTestModel from "../models/labTest.model.ts";
-
+import PrescriptionModel from "../models/prescription.model.ts";
 
 type ReqWithUser = Request & { user?: any };
 
@@ -330,20 +330,22 @@ export const addLabTest = async (req: ReqWithUser, res: Response) => {
     // Find patient by userId (MRN)
     // Optionally verify name matches if provided
     const query: any = { userId: patientUserId };
-    
+
     const patient = await User.findOne(query);
 
     if (!patient) {
-      return res.status(404).json({ message: "Patient not found with that ID" });
+      return res
+        .status(404)
+        .json({ message: "Patient not found with that ID" });
     }
 
     // Optional: Check if name matches (case-insensitive)
     if (patientName) {
       const fullName = `${patient.firstName} ${patient.lastName}`.toLowerCase();
       if (!fullName.includes(patientName.toLowerCase())) {
-         return res.status(400).json({ 
-             message: `Patient ID found, but name does not match. Found: ${patient.firstName} ${patient.lastName}` 
-         });
+        return res.status(400).json({
+          message: `Patient ID found, but name does not match. Found: ${patient.firstName} ${patient.lastName}`,
+        });
       }
     }
 
@@ -364,4 +366,90 @@ export const addLabTest = async (req: ReqWithUser, res: Response) => {
   }
 };
 
+//patch  api/doctor/lab-tests/id/update
+export const updateLabTest = async (req: ReqWithUser, res: Response) => {
+  try {
+    const me = req.user;
+    if (!me?._id) return res.status(401).json({ message: "Unauthorized" });
+    const { id } = req.params;
 
+    const { testType, specimenType, priority, notes } = req.body || {};
+    if (!testType && !specimenType && !priority) {
+      return res
+        .status(400)
+        .json({ message: "At least one field to update must be provided" });
+    }
+    const query: any = { testCode: id };
+    const labTest = await LabTestModel.findOne(query);
+    if (!labTest) {
+      return res.status(404).json({ message: "Lab test not found" });
+    }
+    const updatedLabTest = await LabTestModel.findOneAndUpdate(
+      query,
+      { $set: { testType, specimenType, priority, notes } },
+      { new: true }
+    );
+    return res
+      .status(200)
+      .json({ message: "Lab test updated", updatedLabTest });
+  } catch (err: any) {
+    console.error("updateLabTest error:", err?.message || err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+// delete api/doctor/lab-tests/id/delete
+export const deleteLabTest = async (req: ReqWithUser, res: Response) => {
+  try {
+    const me = req.user;
+    if (!me?._id) return res.status(401).json({ message: "Unauthorized" });
+    const { id } = req.params;
+    const query: any = { testCode: id };
+
+    const labTest = await LabTestModel.findOne(query);
+    if (!labTest) {
+      return res.status(404).json({ message: "Lab test not found" });
+    }
+    await LabTestModel.findOneAndDelete(query);
+    return res.status(200).json({ message: "Lab test deleted" });
+  } catch (err: any) {
+    console.error("deleteLabTest error:", err?.message || err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+//post api/doctor/prescriptions
+export const addPrescription = async (req: ReqWithUser, res: Response) => {
+  try {
+    const me = req.user;
+    if (!me?._id) return res.status(401).json({ message: "Unauthorized" });
+
+    const { patientUserId, items, notes } = req.body || {};
+    if (!patientUserId || !Array.isArray(items) || !items.length) {
+      return res.status(400).json({
+        message: "patientUserId and items array are required",
+      });
+    }
+
+    const query: any = { userId: patientUserId };
+
+    const patient = await User.findOne(query);
+
+    if (!patient) {
+      return res
+        .status(404)
+        .json({ message: "Patient not found with that ID" });
+    }
+
+    const perscribe = await PrescriptionModel.create({
+      patient: patient._id,
+      doctor: me._id,
+      items,
+      notes,
+    });
+    res.status(201).json({ message: "Prescription created", perscribe });
+  } catch (err: any) {
+    console.error("addLabTest error:", err?.message || err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};

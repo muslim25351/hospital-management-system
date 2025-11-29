@@ -13,6 +13,8 @@ import {
   listMyAvailability,
   removeAvailability,
   addLabTest,
+  updateLabTest,
+  deleteLabTest,
 } from "../controllers/doctor.controller.ts";
 
 const router = Router();
@@ -37,5 +39,7 @@ router.delete("/availability/:id", removeAvailability);
 
 // Lab Tests
 router.post("/lab-tests", addLabTest);
+router.patch("/lab-tests/:id/update", updateLabTest);
+router.delete("/lab-tests/:id/delete", deleteLabTest);
 
 export default router;
