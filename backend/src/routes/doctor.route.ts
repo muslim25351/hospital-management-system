@@ -15,6 +15,9 @@ import {
   addLabTest,
   updateLabTest,
   deleteLabTest,
+  addPrescription,
+  updatePrescription,
+  deletePrescription,
 } from "../controllers/doctor.controller.ts";
 
 const router = Router();
@@ -41,5 +44,10 @@ router.delete("/availability/:id", removeAvailability);
 router.post("/lab-tests", addLabTest);
 router.patch("/lab-tests/:id/update", updateLabTest);
 router.delete("/lab-tests/:id/delete", deleteLabTest);
+
+// prescriptions can be added here in future
+router.post("/prescriptions", addPrescription);
+router.patch("/prescriptions/:id/update", updatePrescription);
+router.delete("/prescriptions/:id/delete", deletePrescription);
 
 export default router;

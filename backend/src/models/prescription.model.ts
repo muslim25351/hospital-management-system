@@ -19,6 +19,11 @@ const PrescriptionItemSchema = new Schema(
 
 const PrescriptionSchema = new Schema(
   {
+    prescriptionCode: {
+      type: String,
+      unique: true,
+      trim: true,
+    },
     patient: { type: Types.ObjectId, ref: "User", required: true, index: true },
     doctor: { type: Types.ObjectId, ref: "User", required: true, index: true },
     items: { type: [PrescriptionItemSchema], default: [] },
@@ -38,6 +43,36 @@ const PrescriptionSchema = new Schema(
 );
 
 PrescriptionSchema.index({ patient: 1, doctor: 1, createdAt: -1 });
+PrescriptionSchema.index({ prescriptionCode: 1 }, { unique: true });
+
+// Generate a short, human-readable unique code like RX-AB12CD
+function generatePrescriptionCode(): string {
+  const part = Math.random().toString(36).slice(2, 8).toUpperCase();
+  const tail = Date.now().toString(36).slice(-2).toUpperCase();
+  return `RX-${part}${tail}`;
+}
+
+// Ensure prescriptionCode is set and unique before validation
+PrescriptionSchema.pre("validate", async function (next) {
+  try {
+    if (this.prescriptionCode) return next();
+    let attempts = 0;
+    while (attempts < 5) {
+      const code = generatePrescriptionCode();
+      const exists = await (this.constructor as any).exists({
+        prescriptionCode: code,
+      });
+      if (!exists) {
+        (this as any).prescriptionCode = code;
+        return next();
+      }
+      attempts += 1;
+    }
+    return next(new Error("Failed to generate unique prescription code"));
+  } catch (err) {
+    return next(err as any);
+  }
+});
 
 // Helper to compute status based on items
 PrescriptionSchema.methods.computeStatus = function (): string {

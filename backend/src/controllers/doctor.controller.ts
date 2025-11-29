@@ -5,6 +5,7 @@ import User from "../models/user.model.ts";
 import Availability from "../models/availability.model.ts";
 import LabTestModel from "../models/labTest.model.ts";
 import PrescriptionModel from "../models/prescription.model.ts";
+import PharmacyModel from "../models/pharmacy.model.ts";
 
 type ReqWithUser = Request & { user?: any };
 
@@ -386,7 +387,7 @@ export const updateLabTest = async (req: ReqWithUser, res: Response) => {
     }
     const updatedLabTest = await LabTestModel.findOneAndUpdate(
       query,
-      { $set: { testType, specimenType, priority, notes } },
+      { $set: { testType, specimenType, priority, notes }, updatedBy: me._id },
       { new: true }
     );
     return res
@@ -441,15 +442,126 @@ export const addPrescription = async (req: ReqWithUser, res: Response) => {
         .json({ message: "Patient not found with that ID" });
     }
 
-    const perscribe = await PrescriptionModel.create({
+    // Build transformed items resolving medication reference by:
+    // 1) medication (ObjectId)
+    // 2) medicineCode (auto code from Pharmacy)
+    // 3) name (case-insensitive prefix match)
+    const transformed: any[] = [];
+    for (const raw of items) {
+      if (!raw) continue;
+      const {
+        medication,
+        medicineCode,
+        name,
+        dosage,
+        frequency,
+        durationDays,
+        quantity,
+        notes: itemNotes,
+      } = raw;
+
+      let pharmacyDoc: any = null;
+      if (medication) {
+        pharmacyDoc = await PharmacyModel.findById(String(medication));
+      } else if (medicineCode) {
+        pharmacyDoc = await PharmacyModel.findOne({
+          medicineCode: String(medicineCode),
+        });
+      } else if (name) {
+        pharmacyDoc = await PharmacyModel.findOne({
+          name: { $regex: `^${name}`, $options: "i" },
+        });
+      }
+
+      if (!pharmacyDoc) {
+        return res.status(400).json({
+          message: `Medication not found for item (code/name/id): ${
+            medicineCode || name || medication
+          }`,
+        });
+      }
+
+      transformed.push({
+        medication: pharmacyDoc._id,
+        name: pharmacyDoc.name,
+        dosage,
+        frequency,
+        durationDays,
+        quantity,
+        notes: itemNotes,
+      });
+    }
+
+    if (!transformed.length) {
+      return res
+        .status(400)
+        .json({ message: "No valid medication items provided" });
+    }
+
+    const prescription = await PrescriptionModel.create({
       patient: patient._id,
       doctor: me._id,
-      items,
+      items: transformed,
       notes,
+      createdBy: me._id,
     });
-    res.status(201).json({ message: "Prescription created", perscribe });
+    res.status(201).json({ message: "Prescription created", prescription });
   } catch (err: any) {
     console.error("addLabTest error:", err?.message || err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+// patch api/doctor/prescriptions/id/update
+export const updatePrescription = async (req: ReqWithUser, res: Response) => {
+  try {
+    const me = req.user;
+    if (!me?._id) return res.status(401).json({ message: "Unauthorized" });
+    const { id } = req.params;
+
+    const { items, notes } = req.body || {};
+    if (!Array.isArray(items) || !items.length) {
+      return res.status(400).json({
+        message: "items array is required",
+      });
+    }
+    const query: any = { prescriptionCode: id };
+    const prescription = await PrescriptionModel.findOne(query);
+    if (!prescription) {
+      return res.status(404).json({ message: "Prescription not found" });
+    }
+    const updatedPrescription = await PrescriptionModel.findOneAndUpdate(
+      query,
+      { $set: { items, notes }, updatedBy: me._id },
+      { new: true }
+    );
+    if (!updatedPrescription) {
+      return res.status(404).json({ message: "Prescription not found" });
+    }
+    return res
+      .status(200)
+      .json({ message: "Prescription updated", updatedPrescription });
+  } catch (err: any) {
+    console.error("updatePrescription error:", err?.message || err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+// delete api/doctor/prescriptions/id/delete
+export const deletePrescription = async (req: ReqWithUser, res: Response) => {
+  try {
+    const me = req.user;
+    if (!me?._id) return res.status(401).json({ message: "Unauthorized" });
+    const { id } = req.params;
+    const query: any = { prescriptionCode: id };
+    const prescription = await PrescriptionModel.findOne(query);
+    if (!prescription) {
+      return res.status(404).json({ message: "Prescription not found" });
+    }
+    await PrescriptionModel.findOneAndDelete(query);
+    return res.status(200).json({ message: "Prescription deleted" });
+  } catch (err: any) {
+    console.error("deletePrescription error:", err?.message || err);
     return res.status(500).json({ message: "Internal server error" });
   }
 };

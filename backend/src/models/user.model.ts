@@ -115,6 +115,9 @@ UserSchema.pre("validate", async function (next) {
         nurse: "NUR",
         admin: "ADM",
         labtechnician: "LAB",
+        pharmacist: "PHA",
+        receptionist: "REC",
+        radiologist: "RAD",
       };
       const prefix = prefixMap[roleName?.toLowerCase() || ""] || "USR";
 

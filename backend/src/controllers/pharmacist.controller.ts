@@ -149,3 +149,56 @@ export const listMedications = async (req: ReqWithUser, res: Response) => {
     return res.status(500).json({ message: "Internal server error" });
   }
 };
+
+// POST /api/pharmacist/medications
+export const createMedication = async (req: ReqWithUser, res: Response) => {
+  try {
+    const me = req.user;
+    if (!me?._id) return res.status(401).json({ message: "Unauthorized" });
+
+    const {
+      name,
+      genericName,
+      dosageForm,
+      strength,
+      batchNumber,
+      expiryDate,
+      manufacturer,
+      notes,
+      status,
+    } = req.body || {};
+
+    if (!name || !dosageForm || !strength || !batchNumber || !expiryDate) {
+      return res.status(400).json({
+        message:
+          "name, dosageForm, strength, batchNumber and expiryDate are required",
+      });
+    }
+
+    const med = await Pharmacy.create({
+      name,
+      genericName,
+      dosageForm,
+      strength,
+      batchNumber,
+      expiryDate: new Date(expiryDate),
+      manufacturer,
+      notes,
+      status: status || "active",
+      createdBy: me._id,
+    });
+
+    return res
+      .status(201)
+      .json({ message: "Medication created", medication: med });
+  } catch (err: any) {
+    console.error("createMedication error:", err?.message || err);
+    // Handle duplicate key for (name, batchNumber) or medicineCode
+    if (String(err?.message || "").includes("duplicate key")) {
+      return res
+        .status(409)
+        .json({ message: "Medication with same name/batch already exists" });
+    }
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};

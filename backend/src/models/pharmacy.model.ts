@@ -5,6 +5,12 @@ const { Schema, Types } = mongoose;
 // Represents a single stocked medication batch
 const PharmacySchema = new Schema(
   {
+    medicineCode: {
+      type: String,
+      unique: true,
+      trim: true,
+      immutable: true,
+    },
     name: { type: String, required: true, trim: true }, // Brand or main name
     genericName: { type: String, trim: true },
     batchNumber: { type: String, required: true, trim: true },
@@ -31,7 +37,35 @@ const PharmacySchema = new Schema(
 
 // Indexes
 PharmacySchema.index({ name: 1, batchNumber: 1 }, { unique: true });
+PharmacySchema.index({ medicineCode: 1 }, { unique: true });
 PharmacySchema.index({ expiryDate: 1 });
+
+function generateMedicineCode(): string {
+  const part = Math.random().toString(36).slice(2, 7).toUpperCase();
+  const tail = Date.now().toString(36).slice(-3).toUpperCase();
+  return `MED-${part}${tail}`;
+}
+
+// Auto-generate immutable medicineCode
+PharmacySchema.pre("validate", async function (next) {
+  try {
+    if ((this as any).medicineCode) return next();
+    let attempts = 0;
+    const Model = this.constructor as any;
+    while (attempts < 5) {
+      const code = generateMedicineCode();
+      const exists = await Model.exists({ medicineCode: code });
+      if (!exists) {
+        (this as any).medicineCode = code;
+        return next();
+      }
+      attempts += 1;
+    }
+    return next(new Error("Failed to generate unique medicine code"));
+  } catch (err) {
+    return next(err as any);
+  }
+});
 
 // Helper instance method
 PharmacySchema.methods.isLowStock = function (): boolean {
