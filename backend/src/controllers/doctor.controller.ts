@@ -6,6 +6,7 @@ import Availability from "../models/availability.model.ts";
 import LabTestModel from "../models/labTest.model.ts";
 import PrescriptionModel from "../models/prescription.model.ts";
 import PharmacyModel from "../models/pharmacy.model.ts";
+import RadiologyModel from "../models/radiology.model.ts";
 
 type ReqWithUser = Request & { user?: any };
 
@@ -562,6 +563,62 @@ export const deletePrescription = async (req: ReqWithUser, res: Response) => {
     return res.status(200).json({ message: "Prescription deleted" });
   } catch (err: any) {
     console.error("deletePrescription error:", err?.message || err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+// Doctor: POST /api/doctor/radiology-orders
+export const addRadiologyOrder = async (req: ReqWithUser, res: Response) => {
+  try {
+    const me = req.user;
+    if (!me?._id) return res.status(401).json({ message: "Unauthorized" });
+
+    const {
+      patientUserId,
+      patientName,
+      modality,
+      studyType,
+      bodyPart,
+      priority,
+      scheduledAt,
+      notes,
+    } = req.body || {};
+    if (!patientUserId || !modality) {
+      return res
+        .status(400)
+        .json({ message: "patientUserId and modality are required" });
+    }
+
+    const patient = await User.findOne({ userId: patientUserId });
+    if (!patient)
+      return res
+        .status(404)
+        .json({ message: "Patient not found with that ID" });
+    if (patientName) {
+      const full = `${patient.firstName} ${patient.lastName}`.toLowerCase();
+      if (!full.includes(String(patientName).toLowerCase())) {
+        return res.status(400).json({
+          message: `Patient ID found, but name does not match. Found: ${patient.firstName} ${patient.lastName}`,
+        });
+      }
+    }
+
+    const order = await RadiologyModel.create({
+      patient: patient._id,
+      doctor: me._id,
+      orderedBy: me._id,
+      modality,
+      studyType,
+      bodyPart,
+      priority: priority || "routine",
+      scheduledAt: scheduledAt ? new Date(scheduledAt) : undefined,
+      notes,
+      createdBy: me._id,
+    });
+
+    return res.status(201).json({ message: "Radiology order created", order });
+  } catch (err: any) {
+    console.error("addRadiologyOrder error:", err?.message || err);
     return res.status(500).json({ message: "Internal server error" });
   }
 };
