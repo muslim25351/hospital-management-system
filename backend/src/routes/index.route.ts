@@ -6,6 +6,7 @@ import roleRoutes from "./role.route.ts";
 import adminRoutes from "./admin.route.ts";
 import labRoutes from "./lab.route.ts";
 import pharmacistRoutes from "./pharmacist.route.ts";
+import radiologyRoutes from "./radiology.route.ts";
 
 const router = Router();
 
@@ -19,5 +20,6 @@ router.use("/doctor", doctorRoutes);
 router.use("/admin", adminRoutes);
 router.use("/lab", labRoutes);
 router.use("/pharmacist", pharmacistRoutes);
+router.use("/radiology", radiologyRoutes);
 
 export default router;
