@@ -44,7 +44,7 @@ const RadiologySchema = new Schema(
     completedAt: { type: Date },
 
     reportText: { type: String },
-    findings: { type: String },
+    findings: [{ type: String }],
     impression: { type: String },
     attachments: { type: [AttachmentSchema], default: [] },
 

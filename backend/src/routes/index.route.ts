@@ -7,6 +7,7 @@ import adminRoutes from "./admin.route.ts";
 import labRoutes from "./lab.route.ts";
 import pharmacistRoutes from "./pharmacist.route.ts";
 import radiologyRoutes from "./radiology.route.ts";
+import nurseRoutes from "./nurse.route.ts";
 
 const router = Router();
 
@@ -21,5 +22,6 @@ router.use("/admin", adminRoutes);
 router.use("/lab", labRoutes);
 router.use("/pharmacist", pharmacistRoutes);
 router.use("/radiology", radiologyRoutes);
+router.use("/nurse", nurseRoutes);
 
 export default router;
